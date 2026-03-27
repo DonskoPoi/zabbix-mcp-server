@@ -196,3 +196,6 @@ uv.lock
 
 # test code
 test_code/
+
+# mcp settings
+.mcp.json
