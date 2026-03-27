@@ -1,25 +1,11 @@
 {
   "mcpServers": {
-    "zabbix": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "/home/huzheng/git/zabbix-mcp-server",
-        "zabbix-mcp"
-      ],
-      "env": {
-        "ZABBIX_URL": "http://localhost/zabbix",
-        "ZABBIX_TOKEN": "your-token-here",
-        "READ_ONLY": "false"
-      }
-    },
     "zabbix-readonly": {
       "command": "uv",
       "args": [
         "run",
         "--directory",
-        "/home/huzheng/git/zabbix-mcp-server",
+        "/path/to/zabbix-mcp-server",
         "zabbix-mcp-readonly"
       ],
       "env": {
@@ -32,7 +18,7 @@
       "args": [
         "run",
         "--directory",
-        "/home/huzheng/git/zabbix-mcp-server",
+        "/path/to/zabbix-mcp-server",
         "zabbix-mcp-writable"
       ],
       "env": {
