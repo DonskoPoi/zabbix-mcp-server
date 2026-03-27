@@ -105,167 +105,170 @@ A comprehensive Model Context Protocol (MCP) server for Zabbix integration using
 
 4. **Test the installation:**
    ```bash
-   uv run python scripts/test_server.py
+   # Test read-only server
+   uv run python scripts/test_server.py --readonly
+
+   # Test writable server
+   uv run python scripts/test_server.py --writable
    ```
+
+## Architecture (v2.0.0+)
+
+Version 2.0.0 introduces a fully separated dual-server architecture for maximum security:
+
+```
+zabbix-mcp-server/
+├── zabbix-mcp-readonly  [22 read-only tools]
+│   └── Tools: *_get, apiinfo_version, auto_map_preview, configuration_export
+│
+└── zabbix-mcp-writable  [41 writable tools]
+    └── Tools: *_create, *_update, *_delete, event_acknowledge, auto_map_update, configuration_import
+```
+
+**Key Benefits:**
+- 🔒 **Complete Separation**: No overlap between read and write tools
+- 🛡️ **Security**: Read-only server can never perform modifications
+- ✨ **Simplicity**: Each server has its own independent configuration
+- 📊 **Visibility**: Easy to monitor and audit each server separately
 
 ## Configuration
 
-### Required Environment Variables
+### Shared Configuration (Both Servers)
 
-- `ZABBIX_URL` - Your Zabbix server API endpoint (e.g., `https://zabbix.example.com`)
+```env
+# Required: Zabbix server URL
+ZABBIX_URL=https://zabbix.example.com
 
-### Authentication (choose one method)
+# Authentication Method 1: API Token (Recommended)
+ZABBIX_TOKEN=<your_api_token>
 
-**Method 1: API Token (Recommended)**
-- `ZABBIX_TOKEN` - Your Zabbix API token
+# Authentication Method 2: Username/Password (alternative)
+# ZABBIX_USER=<username>
+# ZABBIX_PASSWORD=<password>
 
-**Method 2: Username/Password**
-- `ZABBIX_USER` - Your Zabbix username
-- `ZABBIX_PASSWORD` - Your Zabbix password
+# SSL Configuration
+VERIFY_SSL=true
+DEBUG=false
+```
 
-### Optional Configuration
+### Read-Only Server Configuration
 
-- `READ_ONLY` - Set to `true`, `1`, or `yes` to enable read-only mode (only GET operations allowed)
-- `VERIFY_SSL` - Enable/disable SSL certificate verification (default: `true`)
+```env
+# READONLY_TRANSPORT: stdio or streamable-http
+READONLY_TRANSPORT=stdio
 
-### Transport Configuration
+# HTTP Transport Settings (only for streamable-http)
+READONLY_HOST=0.0.0.0
+READONLY_PORT=9002
+READONLY_STATELESS_HTTP=false
+READONLY_MOUNTPATH="/"
+READONLY_AUTH_TYPE=no-auth
+```
 
-- `ZABBIX_MCP_TRANSPORT` - Transport type: `stdio` (default) or `streamable-http`
+### Writable Server Configuration
 
-**HTTP Transport Configuration** (only used when `ZABBIX_MCP_TRANSPORT=streamable-http`):
-- `ZABBIX_MCP_HOST` - Server host (default: `127.0.0.1`)
-- `ZABBIX_MCP_PORT` - Server port (default: `8000`)
-- `ZABBIX_MCP_STATELESS_HTTP` - Stateless mode (default: `false`)
-- `AUTH_TYPE` - Must be set to `no-auth` for streamable-http transport
+```env
+# WRITABLE_TRANSPORT: stdio or streamable-http
+WRITABLE_TRANSPORT=stdio
+
+# HTTP Transport Settings (only for streamable-http)
+WRITABLE_HOST=0.0.0.0
+WRITABLE_PORT=9003
+WRITABLE_STATELESS_HTTP=false
+WRITABLE_MOUNTPATH="/"
+WRITABLE_AUTH_TYPE=no-auth
+```
 
 ## Usage
 
-### Running the Server
+### Running the Servers
 
-**With startup script (recommended):**
+**Using the startup script (recommended):**
+
 ```bash
-uv run python scripts/start_server.py
+# Start only the read-only server
+uv run python scripts/start_server.py --readonly
+
+# Start only the writable server
+uv run python scripts/start_server.py --writable
+
+# Start both servers in background
+uv run python scripts/start_server.py --all
 ```
 
 **Direct execution:**
+
 ```bash
-uv run python src/zabbix_mcp_server.py
+# Read-only server
+uv run zabbix-mcp-readonly
+
+# Writable server
+uv run zabbix-mcp-writable
 ```
 
 ### Transport Options
 
-The server supports two transport methods:
+Both servers support two transport methods:
 
 #### STDIO Transport (Default)
 Standard input/output transport for MCP clients like Claude Desktop:
-```bash
-# Set in .env or environment
-ZABBIX_MCP_TRANSPORT=stdio
+```env
+READONLY_TRANSPORT=stdio
+WRITABLE_TRANSPORT=stdio
 ```
 
 #### HTTP Transport
 HTTP-based transport for web integrations:
-```bash
-# Set in .env or environment
-ZABBIX_MCP_TRANSPORT=streamable-http
-ZABBIX_MCP_HOST=127.0.0.1
-ZABBIX_MCP_PORT=8000
-ZABBIX_MCP_STATELESS_HTTP=false
-AUTH_TYPE=no-auth
+```env
+READONLY_TRANSPORT=streamable-http
+READONLY_HOST=0.0.0.0
+READONLY_PORT=9002
+READONLY_AUTH_TYPE=no-auth
+
+WRITABLE_TRANSPORT=streamable-http
+WRITABLE_HOST=0.0.0.0
+WRITABLE_PORT=9003
+WRITABLE_AUTH_TYPE=no-auth
 ```
 
 **Note:** When using `streamable-http` transport, `AUTH_TYPE` must be set to `no-auth`.
 
-### Testing
+### MCP Client Configuration
 
-**Run test suite:**
-```bash
-uv run python scripts/test_server.py
+Configure your MCP client (Claude Desktop, etc.) to use both servers:
+
+```json
+{
+  "mcpServers": {
+    "zabbix-readonly": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/zabbix-mcp-server", "zabbix-mcp-readonly"],
+      "env": {
+        "ZABBIX_URL": "https://zabbix.example.com",
+        "ZABBIX_TOKEN": "your-token-here"
+      }
+    },
+    "zabbix-writable": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/zabbix-mcp-server", "zabbix-mcp-writable"],
+      "env": {
+        "ZABBIX_URL": "https://zabbix.example.com",
+        "ZABBIX_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
 ```
-
-### Read-Only Mode
-
-When `READ_ONLY=true`, the server will only expose GET operations (retrieve data) and block all create, update, and delete operations. This is useful for:
-
-- 📊 Monitoring dashboards
-- 🔍 Read-only integrations
-- 🔒 Security-conscious environments
-- 🛡️ Preventing accidental modifications
-
-### Example Tool Calls
-
-**Get all hosts:**
-```python
-host_get()
-```
-
-**Get hosts in specific group:**
-```python
-host_get(groupids=["1"])
-```
-
-**Create a new host:**
-```python
-host_create(
-    host="server-01",
-    groups=[{"groupid": "1"}],
-    interfaces=[{
-        "type": 1,
-        "main": 1,
-        "useip": 1,
-        "ip": "192.168.1.100",
-        "dns": "",
-        "port": "10050"
-    }]
-)
-```
-
-**Get recent problems:**
-```python
-problem_get(recent=True, limit=10)
-```
-
-**Get history data:**
-```python
-history_get(
-    itemids=["12345"],
-    time_from=1640995200,
-    limit=100
-)
-```
-
-**Get all proxies:**
-```python
-proxy_get()
-```
-
-**Create a new active proxy:**
-```python
-proxy_create(
-    host="proxy-01",
-    status=5,
-    description="Main datacenter proxy"
-)
-```
-
-## MCP Integration
-
-This server is designed to work with MCP-compatible clients like Claude Desktop. See [MCP_SETUP.md](MCP_SETUP.md) for detailed integration instructions.
 
 ## Docker Support
 
 ### Using Docker Compose
 
-1. **Configure environment:**
-   ```bash
-   cp config/.env.example .env
-   # Edit .env with your settings
-   ```
-
-2. **Run with Docker Compose:**
-   ```bash
-   docker compose up -d
-   ```
+```bash
+cp config/.env.example .env
+# Edit .env with your settings
+docker compose up -d
+```
 
 ### Building Docker Image
 
@@ -279,23 +282,30 @@ docker build -t zabbix-mcp-server .
 
 ```
 zabbix-mcp-server/
-├── src/
-│   └── zabbix_mcp_server.py    # Main server implementation
+├── src/zabbix_mcp_server/
+│   ├── __init__.py              # Package initialization (v2.0.0)
+│   ├── main_readonly.py         # Read-only server
+│   ├── main_writable.py         # Writable-only server
+│   ├── core/                    # Core functionality
+│   │   ├── client.py            # Zabbix client
+│   │   ├── config.py            # Configuration (separated)
+│   │   ├── utils.py             # Utilities
+│   │   └── tool_registry.py     # Unified tool registry (NEW!)
+│   └── tools/                   # Tool modules (22+)
+│       ├── host.py
+│       ├── hostgroup.py
+│       ├── item.py
+│       └── ...
 ├── scripts/
-│   ├── start_server.py         # Startup script with validation
-│   └── test_server.py          # Test script
+│   ├── start_server.py          # Enhanced startup (--readonly/--writable/--all)
+│   └── test_server.py           # Test suite
 ├── config/
-│   ├── .env.example           # Environment configuration template
-│   └── mcp.json               # MCP client configuration example
-├── pyproject.toml             # Python project configuration
-├── requirements.txt           # Dependencies
-├── Dockerfile                 # Docker configuration
-├── docker-compose.yml         # Docker Compose setup
-├── README.md                  # This file
-├── MCP_SETUP.md              # MCP integration guide
-├── CONTRIBUTING.md           # Contribution guidelines
-├── CHANGELOG.md              # Version history
-└── LICENSE                   # MIT license
+│   ├── .env.example             # v2.0.0 config template
+│   └── mcp.json                 # MCP config example
+├── pyproject.toml               # Project configuration (v2.0.0)
+├── docker-compose.yml
+├── CHANGELOG.md                 # Version history
+└── README.md                    # This file
 ```
 
 ### Contributing
@@ -309,71 +319,54 @@ zabbix-mcp-server/
 ### Running Tests
 
 ```bash
-# Test server functionality
-uv run python scripts/test_server.py
+# Test read-only server
+uv run python scripts/test_server.py --readonly
 
-# Test with Docker
-docker-compose exec zabbix-mcp python scripts/test_server.py
+# Test writable server
+uv run python scripts/test_server.py --writable
 ```
 
 ## Error Handling
 
-The server includes comprehensive error handling:
-
-- ✅ Authentication errors are clearly reported
-- 🔒 Read-only mode violations are blocked with descriptive messages
-- ✔️ Invalid parameters are validated
-- 🌐 Network and API errors are properly formatted
+- ✅ Authentication errors clearly reported
+- 🔒 Write operations only available on writable server
+- ✔️ Invalid parameters validated
+- 🌐 Network and API errors properly formatted
 - 📝 Detailed logging for troubleshooting
 
 ## Security Considerations
 
-- 🔑 Use API tokens instead of username/password when possible
-- 🔒 Enable read-only mode for monitoring-only use cases
-- 🛡️ Secure your environment variables
-- 🔐 Use HTTPS for Zabbix server connections
+- 🔑 Use API tokens instead of username/password
+- 🔒 Use the read-only server for monitoring/dashboard integrations
+- 🛡️ Only use the writable server when modifications are actually needed
+- 🔐 Secure your environment variables
+- 🔄 Use HTTPS for Zabbix connections
 - 🔄 Regularly rotate API tokens
-- 📁 Store configuration files securely
 
 ## Troubleshooting
 
-### Common Issues
+**Connection Failed:** Verify `ZABBIX_URL`, check credentials, ensure Zabbix API is enabled.
 
-**Connection Failed:**
-- Verify `ZABBIX_URL` is correct and accessible
-- Check authentication credentials
-- Ensure Zabbix API is enabled
+**Tool Not Found:** Run `uv sync`, verify Python 3.10+.
 
-**Permission Denied:**
-- Verify user has sufficient Zabbix permissions
-- Check if read-only mode is enabled when trying to modify data
+**Debug Mode:** Set `DEBUG=1` for detailed logging.
 
-**Tool Not Found:**
-- Ensure all dependencies are installed: `uv sync`
-- Verify Python version compatibility (3.10+)
-
-### Debug Mode
-
-Set environment variable for detailed logging:
-```bash
-export DEBUG=1
-uv run python scripts/start_server.py
-```
+**Port Conflicts:** Change `READONLY_PORT` or `WRITABLE_PORT` in .env.
 
 ## Dependencies
 
 - [FastMCP](https://github.com/jlowin/fastmcp) - MCP server framework
-- [python-zabbix-utils](https://github.com/zabbix/python-zabbix-utils) - Official Zabbix Python library
+- [python-zabbix-utils](https://github.com/zabbix/python-zabbix-utils) - Official Zabbix library
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- [Zabbix](https://www.zabbix.com/) for the monitoring platform
-- [Model Context Protocol](https://modelcontextprotocol.io/) for the integration standard
-- [FastMCP](https://github.com/jlowin/fastmcp) for the server framework
+- [Zabbix](https://www.zabbix.com/)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [FastMCP](https://github.com/jlowin/fastmcp)
 
 ## Support
 
@@ -384,3 +377,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Made with ❤️ for the Zabbix and MCP communities**
+
+**Version 2.0.0 - Fully Separated Dual-Server Architecture**

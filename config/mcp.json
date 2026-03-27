@@ -5,14 +5,40 @@
       "args": [
         "run",
         "--directory",
-        "/path/to/zabbix-mcp-server",
-        "python",
-        "src/zabbix_mcp_server.py"
+        "/home/huzheng/git/zabbix-mcp-server",
+        "zabbix-mcp"
       ],
       "env": {
-        "ZABBIX_URL": "https://zabbix.example.com",
-        "ZABBIX_TOKEN": "<your_api_token>",
-        "READ_ONLY": "true"
+        "ZABBIX_URL": "http://localhost/zabbix",
+        "ZABBIX_TOKEN": "your-token-here",
+        "READ_ONLY": "false"
+      }
+    },
+    "zabbix-readonly": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/home/huzheng/git/zabbix-mcp-server",
+        "zabbix-mcp-readonly"
+      ],
+      "env": {
+        "ZABBIX_URL": "http://localhost/zabbix",
+        "ZABBIX_TOKEN": "your-token-here"
+      }
+    },
+    "zabbix-writable": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/home/huzheng/git/zabbix-mcp-server",
+        "zabbix-mcp-writable"
+      ],
+      "env": {
+        "ZABBIX_URL": "http://localhost/zabbix",
+        "ZABBIX_TOKEN": "your-token-here",
+        "READ_ONLY": "false"
       }
     }
   }
